@@ -1,0 +1,40 @@
+---
+- hosts: ose-bastion
+  user: root
+  gather_facts: False
+  vars_files:
+    - ssh_keys/ssh_key_vault.yml
+  tasks:
+  - name: Setup | authorized key upload (root)
+    authorized_key: user=root
+      state=present
+      key={{ssh_public_key}}
+#  - name: generate key pair
+#    shell: echo -e 'y\n' | ssh-keygen -b 4096 -t rsa -f /root/.ssh/id_rsa -N "" -q
+#  - shell: echo {{ssh_private_key}} |base64 --decode
+#    register: ssh_private_key_decoded
+#  - name: Copy | identity to bastion host
+#    copy: content="{{ssh_private_key_decoded.stdout}}" dest=/home/{{createuser}}/.ssh/id_rsa mode=0600
+  - name: Copy | public key to bastion host
+    copy: content="{{ssh_public_key}}" dest=/root/.ssh/id_rsa.pub mode=0600
+  - name: Install epel repo
+    yum: name={{ item }} state=present
+    with_items:
+      - https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+  - name: Install pre requisites
+    yum: name={{ item }} state=present
+    with_items:
+      - python2-pip
+      - python-virtualenv
+  - name: Install | python pexpect module
+    pip:
+      name: pexpect
+  - name: Copy ssh keys to all hosts
+    expect:
+      command: scp -o StrictHostKeyChecking=no /root/.ssh/id_rsa.pub root@{{item}}:/root/.ssh/authorized_keys'
+#      command: ssh-copy-id root@{{item}}
+      responses:
+        (?i)password: "{{ssh_passphrase}}"
+    with_inventory_hostnames:
+    - all:!ose-bastion:!bastion-nat:!master-nat:!router-nat
+

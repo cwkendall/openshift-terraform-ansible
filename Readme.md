@@ -19,8 +19,36 @@ For this getting started section, let's assume the directory structure looks lik
     ./openshift-terraform-ansible/
     ./openshift-ansible/
     ./terraform.py/
-    
+
+***IMPORTANT***: Ensure that the matching branch of openshift-ansible-installer in checked out instead of master! E.g. [release-1.5](https://github.com/openshift/openshift-ansible/tree/release-1.5) for Origin 1.5
+
 You'll need to fill in some credentials for the different environments that you use. There are two files that need to be updated: the terraform credentials and the RHEL subscription credentials (NOTE: you need RHEL to install OpenShift Enterprise. If you're just installing Origin, then you don't need a subscription -- ie, can just use Fedora)
+
+### Dimension Data Credentials
+
+You will need the terraform [dd-cloud-compute-terraform](https://github.com/DimensionDataResearch/dd-cloud-compute-terraform) provider present in your .terraformrc (or installed to your terraform )
+***NOTE:***: Compiling from source is highly recommended!
+```
+providers {
+    ddcloud = "/path/to/your/custom/terraform/provider/bin/terraform-provider-ddcloud"
+}
+```
+
+To access Dimension Data Cloud, terraform needs to know the username and password for cloud control console.
+Create a file named `terraform.tfvars` in the `didata` directory of this repo and assign the values as such:
+
+Use [terraform-inventory](https://github.com/cwkendall/terraform-inventory) instead of terraform.py (credit: [Adam Mckaig](https://github.com/adammck))
+
+    dd_username     = "XXXXXXXXXXXX"
+    dd_password     = "XXXXXXXXXXXX"
+    dd_region       = "AU"
+    dd_datacenter   = "AU9"
+    dd_netdomain    = "Openshift"
+    dd_vlan         = "openshift_test"
+    dd_vlan_netaddr = "192.168.64"
+    dd_vlan_prefix  = "24"
+    num_nodes       = "3"
+    dd_image        = "CentOS 7 64-bit 2 CPU"
 
 ### AWS Credentials
 To access AWS, terraform needs to know the secret keys and access keys for AWS. 
@@ -132,8 +160,18 @@ Once you've got your inventory scripts, you can run this ansible playbook:
     
 Congrats! You've got an openshift cluster!
      
+### Post-install configuration
+
 Now run this script to set up the registry/router/etc:
      
     sudo su -
     export INTERNAL_HOSTNAME=$(hostname -f)
     sh <(curl -s -L https://gist.github.com/christian-posta/dbabd26005989bafab98/raw) $INTERNAL_HOSTNAME 
+
+#### ALTERNATIVELY
+htpasswd /etc/origin/openshift-passwd admin
+
+oadm policy add-cluster-role-to-user cluster-admin admin
+
+
+

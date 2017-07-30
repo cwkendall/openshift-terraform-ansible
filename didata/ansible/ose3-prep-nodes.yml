@@ -1,9 +1,12 @@
 ---
-- hosts: all
-  sudo: yes
+- hosts: OSEv3
   tasks:
-    - name: Remove Network Manager
-      yum: name=NetworkManager state=absent
+    - name: Generate /etc/hosts file
+      template: src=hosts.j2 dest=/etc/hosts
+    - name: Ensure Network Manager
+      yum: name=NetworkManager state=present
+    - name: Start Network Manager
+      service: name=NetworkManager state=started enabled=yes
     - name: Install pre requisites
       yum: name={{ item }} state=present
       with_items:
@@ -16,14 +19,43 @@
           - iptables-services
           - bridge-utils
           - tmux
+          - sg3_utils
     - name: Update all yum packages
       yum: name=* state=latest
     - name: Install Docker
       yum: name=docker state=present
     - name: Create docker storage config
-      lineinfile: dest=/etc/sysconfig/docker-storage-setup create=yes state=present line='DEVS=/dev/sdb' regexp="^#?DEVS=" 
+      lineinfile: dest=/etc/sysconfig/docker-storage-setup create=yes state=present line='{{item}}' regexp="^#?{{item}}" 
+      with_items:
+        - 'DEVS=sdb'
+        - 'VG=docker-vg'
+      when:
+        - ansible_hostname != 'ose-master'
+    - name: Scan SCSI bus for moved or resized drives
+      shell: rescan-scsi-bus.sh --resize --update
+    - name: Scan SCSI bus for new drives
+      shell: rescan-scsi-bus.sh --alltargets --remove
     - name: Execute docker storage setup
       command: docker-storage-setup
+      ignore_errors: True
+    - name: Create partition on root drive
+      parted:
+        device: /dev/sda
+        flags: [ lvm ]
+        part_start: 10GiB
+        number: 3
+        state: present
+    - name: Add partition to volume group
+      lvg:
+        vg: centos
+        pvs: /dev/sda2,/dev/sda3
+    - name: Expand root partition
+      lvol:
+        vg: centos
+        lv: root
+        size: +100%FREE
+    - name: Expand root filesystem
+      command: xfs_growfs /dev/mapper/centos-root
     - name: Enable insecure registry... since we like insecure things
       lineinfile: dest=/etc/sysconfig/docker state=present line='OPTIONS=--insecure-registry 172.30.0.0/16' regexp="^#?OPTIONS" 
     - name: Start docker

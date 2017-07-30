@@ -1,0 +1,23 @@
+---
+- hosts: all:!bastion-nat:!master-nat:!router-nat
+  user: root
+  gather_facts: False
+  vars_files:
+    - ssh_keys/ssh_key_vault.yml
+  tasks:
+#  - name: generate key pair
+#    shell: echo -e 'y\n' | ssh-keygen -b 4096 -t rsa -f /root/.ssh/id_rsa -N "" -q
+  - name: Setup | create user
+    command: useradd -m {{ createuser }} creates=/home/{{ createuser }}
+  - name: Setup | set user password
+    shell: usermod -p $(echo '{{ createpassword }}' | openssl passwd -1 -stdin) {{ createuser }}
+  - name: Setup | authorized key upload
+    authorized_key: user={{ createuser }}
+      state=present
+      key={{ssh_public_key}}
+  - name: Sudoers | update sudoers file and validate
+    lineinfile: "dest=/etc/sudoers
+      insertafter=EOF
+      line='{{ createuser }} ALL=(ALL) NOPASSWD: ALL'
+      regexp='{{ createuser }} ALL=(ALL) NOPASSWD: ALL'
+      state=present"
